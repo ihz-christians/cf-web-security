@@ -1,0 +1,53 @@
+# ------------------------------------------------------------------------------
+# Golden Phat: Operational Security (.gitignore)
+# ------------------------------------------------------------------------------
+# Principle: "Code in Git, Data on Disk."
+# We explicitly ignore all scan results, evidence, and downloaded assets.
+# ------------------------------------------------------------------------------
+
+# --- 1. Data Sovereignty (CRITICAL) ---
+# Never commit findings, logs, or evidence to the repository.
+pentest/runs/
+pentest/evidence/
+pentest/findings/
+pentest/recon/
+pentest/reports/
+pentest/logs/
+pentest/latest
+
+# --- 2. Downloaded Assets ---
+# Wordlists are large and should be fetched via 'make wordlists'
+pentest/wordlists/
+
+# --- 3. Local State & History ---
+# Preserves operational security by not leaking command history
+.container_bash_history
+.python_history
+.bash_history
+.zsh_history
+
+# --- 4. OS & Editor Noise ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- 5. Build Artifacts ---
+# If you accidentally run 'go build' or 'cargo build' locally
+vendor/
+target/
+bin/
+go.sum
+Cargo.lock
+*.test
+*.out
+
+# --- 6. Explicit Whitelist ---
+# We purposefully allow these to ensure the Scope is tracked.
+# (Listed here for clarity, though not strictly required unless parents are ignored)
+# !pentest/targets/scope.md
+# !pentest/targets/targets.txt
