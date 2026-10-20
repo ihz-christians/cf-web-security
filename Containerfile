@@ -119,17 +119,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Copy Artifacts from Builders ---
-
-# Go Binaries
-COPY --from=go-builder /out/* /usr/local/bin/
-# Rust Binaries
-COPY --from=rust-builder /usr/local/cargo/bin/feroxbuster /usr/local/bin/
-COPY --from=rust-builder /usr/local/cargo/bin/rustscan /usr/local/bin/
-
-# Convenience alias for kiterunner & jwt_tool
-RUN ln -s /usr/local/bin/kiterunner /usr/local/bin/kr
-
 # --- Third-Party Repositories (Cloned & Configured) ---
 
 # testssl.sh (Pinned Tag)
@@ -160,6 +149,17 @@ RUN \
 # retire.js, arjun (Parameter Discovery), semgrep (SAST)
 RUN npm install -g retire --no-fund --no-audit && \
     pip3 install arjun semgrep --break-system-packages
+
+# --- Copy Artifacts from Builders ---
+
+# Go Binaries (copied after pip to ensure ProjectDiscovery tools like httpx take precedence over python packages)
+COPY --from=go-builder /out/* /usr/local/bin/
+# Rust Binaries
+COPY --from=rust-builder /usr/local/cargo/bin/feroxbuster /usr/local/bin/
+COPY --from=rust-builder /usr/local/cargo/bin/rustscan /usr/local/bin/
+
+# Convenience alias for kiterunner
+RUN ln -s /usr/local/bin/kiterunner /usr/local/bin/kr
 
 # --- Configuration & User ---
 
