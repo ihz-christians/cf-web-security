@@ -100,6 +100,7 @@ ENV PATH="/usr/local/bin:/opt/testssl:/etc/profile.d:${PATH}"
 # Note: 'nmap' is often required by rustscan or similar tools for full functionality
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
+    bsdextrautils \
     ca-certificates \
     curl \
     dnsutils \
@@ -118,6 +119,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     util-linux \
     wget \
+    xxd \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Third-Party Repositories (Cloned & Configured) ---
