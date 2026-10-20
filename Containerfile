@@ -93,6 +93,7 @@ LABEL org.opencontainers.image.description="Go/Rust Pentest Toolkit for Cloudfla
 LABEL org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV TESTSSL_INSTALL_DIR="/opt/testssl"
 ENV PATH="/usr/local/bin:/opt/testssl:/etc/profile.d:${PATH}"
 
 # Runtime dependencies
@@ -129,6 +130,7 @@ ARG H2CSMUGGLER_COMMIT="7ea573a9b13bfce6d0f5d4a96a82e637a9dafe2e"
 RUN \
     # 1. testssl.sh
     git clone --depth 1 --branch "${TESTSSL_TAG}" https://github.com/drwetter/testssl.sh.git /opt/testssl && \
+    ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh && \
     # 2. h2csmuggler
     git clone https://github.com/BishopFox/h2csmuggler.git /opt/h2csmuggler && \
     cd /opt/h2csmuggler && git checkout "${H2CSMUGGLER_COMMIT}" && cd / && \
