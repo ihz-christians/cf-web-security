@@ -135,7 +135,10 @@ RUN \
     ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl.sh && \
     # 2. h2csmuggler
     git clone https://github.com/BishopFox/h2csmuggler.git /opt/h2csmuggler && \
-    cd /opt/h2csmuggler && git checkout "${H2CSMUGGLER_COMMIT}" && cd / && \
+    cd /opt/h2csmuggler && git checkout "${H2CSMUGGLER_COMMIT}" && \
+    if [ -f requirements.txt ]; then pip3 install -r requirements.txt --break-system-packages; fi && \
+    chmod +x h2csmuggler.py && \
+    ln -s /opt/h2csmuggler/h2csmuggler.py /usr/local/bin/h2csmuggler && cd / && \
     # 3. jwt_tool
     git clone --depth 1 https://github.com/ticarpi/jwt_tool.git /opt/jwt_tool && \
     pip3 install -r /opt/jwt_tool/requirements.txt --break-system-packages && \

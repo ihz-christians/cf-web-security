@@ -5,7 +5,7 @@
 IMAGE_NAME := cf-web-api-security
 IMAGE_TAG  := latest
 
-.PHONY: help build run interactive clean wordlists
+.PHONY: help build build-image run interactive clean wordlists
 
 help: ## Display this help message
 	@echo "Usage: make <target> [vars]"
@@ -19,6 +19,9 @@ help: ## Display this help message
 
 build: ## Build the container image from source
 	podman build -t $(IMAGE_NAME):$(IMAGE_TAG) -f Containerfile .
+
+build-image: build ## Alias for build
+
 
 run: ## Execute a command in a target-scoped container
 	@if [ -z "$(TARGET)" ] || [ -z "$(CMD)" ]; then \

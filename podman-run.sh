@@ -69,6 +69,7 @@ podman run --rm -it \
   --cap-drop=ALL \
   -v "${PENTEST_DIR}:/work/pentest:Z" \
   -w "/work/pentest" \
-  -e "SCAN_RESULTS_DIR=${RUN_DIR_RELATIVE}" \
+  -e "SCAN_RESULTS_DIR=/work/pentest/${RUN_DIR_RELATIVE}" \
+  -e "TARGET_ID=${TARGET_ID}" \
   "${IMAGE}" \
   "${COMMAND_TO_RUN[@]}"

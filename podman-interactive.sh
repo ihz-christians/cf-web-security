@@ -14,7 +14,6 @@
 # If not, the shell starts in the main pentest directory for general tasks.
 
 set -euo pipefail
-set -x
 
 # --- Configuration ---
 readonly IMAGE="${IMAGE:-cf-web-api-security:latest}"
@@ -58,8 +57,8 @@ if [[ -n "${TARGET_ID}" ]]; then
         exit 1
     fi
 
-    # Set environment variables for the container tools
-    ENV_VARS+=("-e" "SCAN_RESULTS_DIR=${RUN_DIR_RELATIVE}")
+    # Set environment variables for the container tools (Absolute path inside container)
+    ENV_VARS+=("-e" "SCAN_RESULTS_DIR=/work/pentest/${RUN_DIR_RELATIVE}")
     ENV_VARS+=("-e" "TARGET_ID=${TARGET_ID}")
 
     # Start the shell directly inside the run directory for focus
@@ -69,6 +68,7 @@ else
     echo "[+] Mode: General Exploration Session"
     echo "[+] Context: Root (/work/pentest)"
     echo "[!] Note: No specific result directory selected."
+    ENV_VARS+=("-e" "SCAN_RESULTS_DIR=/work/pentest")
 fi
 
 # --- Execution ---

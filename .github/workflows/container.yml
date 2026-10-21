@@ -47,19 +47,27 @@ jobs:
         run: |
           docker run --rm cf-pentest:ci bash -lc '
             set -e
-            go version || true
+            echo "[+] Verifying Go tools..."
             subfinder -version
             dnsx -version
             httpx -version
             ffuf -V
             nuclei -version
-            amass -version || true
+            gau -version
+            dalfox version
             kr --help >/dev/null
+            echo "[+] Verifying Rust tools..."
+            feroxbuster -V
+            rustscan -V
+            echo "[+] Verifying Python & Node tools..."
             python3 -V
             arjun -h >/dev/null
+            jwt_tool -h >/dev/null
+            h2csmuggler -h >/dev/null
             semgrep --version
             testssl.sh --help >/dev/null
             retire --version
+            echo "[+] All security tools verified successfully!"
           '
 
       - name: Build & Push (multi-arch)
