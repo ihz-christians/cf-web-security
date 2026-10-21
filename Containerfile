@@ -136,6 +136,7 @@ RUN \
     # 2. h2csmuggler
     git clone https://github.com/BishopFox/h2csmuggler.git /opt/h2csmuggler && \
     cd /opt/h2csmuggler && git checkout "${H2CSMUGGLER_COMMIT}" && \
+    pip3 install h2 --break-system-packages && \
     if [ -f requirements.txt ]; then pip3 install -r requirements.txt --break-system-packages; fi && \
     chmod +x h2csmuggler.py && \
     ln -s /opt/h2csmuggler/h2csmuggler.py /usr/local/bin/h2csmuggler && cd / && \
