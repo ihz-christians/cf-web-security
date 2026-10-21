@@ -1,12 +1,12 @@
 # ------------------------------------------------------------------------------
-# Golden Phat: Operational Security (.gitignore)
+# Schutz lokaler Betriebsdaten (.gitignore)
 # ------------------------------------------------------------------------------
-# Principle: "Code in Git, Data on Disk."
-# We explicitly ignore all scan results, evidence, and downloaded assets.
+# Grundsatz: Quellcode in Git, Prüfdaten lokal.
+# Scan-Ergebnisse, Nachweise und heruntergeladene Dateien werden ausgeschlossen.
 # ------------------------------------------------------------------------------
 
-# --- 1. Data Sovereignty (CRITICAL) ---
-# Never commit findings, logs, or evidence to the repository.
+# --- 1. Prüfdaten ---
+# Befunde, Protokolle und Nachweise nicht in das Repository übernehmen.
 pentest/runs/
 pentest/evidence/
 pentest/findings/
@@ -15,18 +15,18 @@ pentest/reports/
 pentest/logs/
 pentest/latest
 
-# --- 2. Downloaded Assets ---
-# Wordlists are large and should be fetched via 'make wordlists'
+# --- 2. Heruntergeladene Dateien ---
+# Wortlisten sind umfangreich und werden mit 'make wordlists' geladen.
 pentest/wordlists/
 
-# --- 3. Local State & History ---
-# Preserves operational security by not leaking command history
+# --- 3. Lokaler Zustand und Befehlsverlauf ---
+# Der lokale Befehlsverlauf wird nicht versioniert.
 .container_bash_history
 .python_history
 .bash_history
 .zsh_history
 
-# --- 4. OS & Editor Noise ---
+# --- 4. Betriebssystem- und Editor-Dateien ---
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -36,8 +36,8 @@ pentest/wordlists/
 *.swp
 *.swo
 
-# --- 5. Build Artifacts ---
-# If you accidentally run 'go build' or 'cargo build' locally
+# --- 5. Build-Artefakte ---
+# Lokale Ausgaben von 'go build' oder 'cargo build'
 vendor/
 target/
 bin/
@@ -46,8 +46,8 @@ Cargo.lock
 *.test
 *.out
 
-# --- 6. Explicit Whitelist ---
-# We purposefully allow these to ensure the Scope is tracked.
-# (Listed here for clarity, though not strictly required unless parents are ignored)
+# --- 6. Ausdrücklich zugelassene Dateien ---
+# Diese Dateien sollen im Repository bleiben.
+# (Zur Übersicht aufgeführt; nur nötig, wenn übergeordnete Pfade ausgeschlossen sind.)
 # !pentest/targets/scope.md
 # !pentest/targets/targets.txt

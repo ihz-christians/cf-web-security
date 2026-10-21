@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1.6
 # ------------------------------------------------------------------------------
-# Golden Phat: Robust, Multi-Stage Security Toolkit
+# Mehrstufiges Image für Sicherheitsprüfungen
 #
-# Principles:
-# 1. Source-Based: Builds Go and Rust tools from source to guarantee availability
-#    and architecture compatibility (AMD64/ARM64).
-# 2. Immutable: Pinning versions ensures builds are reproducible.
-# 3. Minimal: The final runtime image contains only binaries, no compilers.
+# Grundsätze:
+# 1. Go- und Rust-Werkzeuge werden für die unterstützten Architekturen gebaut.
+# 2. Einige Werkzeugversionen sind festgelegt; nicht alle Abhängigkeiten sind
+#    versioniert, daher sind identische Builds nicht garantiert.
+# 3. Das Laufzeit-Image enthält keine Go- oder Rust-Compiler.
 # ------------------------------------------------------------------------------
 
 ################################################################################
-# STAGE 1: GO BUILDER
+# STUFE 1: GO-BUILD
 ################################################################################
 FROM debian:12-slim AS go-builder
 
@@ -19,14 +19,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV GOBIN=/out
 ENV PATH="/opt/go/bin:${PATH}"
 
-# Install dependencies for downloading Go
+# Abhängigkeiten zum Herunterladen von Go installieren
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Go (Pinned Version)
+# Festgelegte Go-Version installieren
 ARG GO_VERSION=1.22.3
 RUN case "$TARGETARCH" in \
     amd64) GOARCH=amd64 ;; \
@@ -36,7 +36,7 @@ RUN case "$TARGETARCH" in \
     curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz" \
     | tar -xz -C /opt
 
-# Define tool versions
+# Werkzeugversionen festlegen
 ARG SUBFINDER_VER=v2.6.6
 ARG DNSX_VER=v1.2.1
 ARG HTTPX_VER=v1.6.7
@@ -46,7 +46,7 @@ ARG KITERUNNER_VER=v1.0.2
 ARG GAU_VER=v2.2.3
 ARG DALFOX_VER=v2.9.1
 
-# Compile Go tools (Grouped to reduce layers and cache)
+# Go-Werkzeuge gemeinsam installieren, um Build-Schichten zu reduzieren
 RUN go install "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFINDER_VER}" && \
     go install "github.com/projectdiscovery/dnsx/cmd/dnsx@${DNSX_VER}" && \
     go install "github.com/projectdiscovery/httpx/cmd/httpx@${HTTPX_VER}" && \
@@ -59,13 +59,13 @@ RUN go install "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFIND
     go install "github.com/tomnomnom/qsreplace@latest"
 
 ################################################################################
-# STAGE 2: RUST BUILDER
+# STUFE 2: RUST-BUILD
 ################################################################################
 FROM rust:1-slim-bookworm AS rust-builder
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 
-# Install compilation dependencies (OpenSSL is required for many network tools)
+# Build-Abhängigkeiten installieren (OpenSSL wird von mehreren Netzwerkwerkzeugen benötigt)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
@@ -74,17 +74,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     perl \
     && rm -rf /var/lib/apt/lists/*
 
-# Define tool versions
+# Werkzeugversionen festlegen
 ARG FEROXBUSTER_VER=2.10.0
 ARG RUSTSCAN_VER=2.1.1
 
-# Compile Rust tools
-# We install from crates.io which is more reliable than scraping release assets
+# Rust-Werkzeuge installieren.
+# Die Installation erfolgt über crates.io statt über heruntergeladene Release-Dateien.
 RUN cargo install feroxbuster --version ${FEROXBUSTER_VER} --locked && \
     cargo install rustscan --version ${RUSTSCAN_VER}
 
 ################################################################################
-# STAGE 3: RUNTIME IMAGE
+# STUFE 3: LAUFZEIT-IMAGE
 ################################################################################
 FROM debian:12-slim
 
@@ -96,8 +96,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TESTSSL_INSTALL_DIR="/opt/testssl"
 ENV PATH="/usr/local/bin:/opt/testssl:/etc/profile.d:${PATH}"
 
-# Runtime dependencies
-# Note: 'nmap' is often required by rustscan or similar tools for full functionality
+# Laufzeitabhängigkeiten
+# nmap wird für bestimmte Funktionen von rustscan und ähnlichen Werkzeugen benötigt.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     bsdextrautils \
@@ -122,11 +122,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xxd \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Third-Party Repositories (Cloned & Configured) ---
+# --- Drittanbieter-Repositories herunterladen und einrichten ---
 
-# testssl.sh (Pinned Tag)
+# Festgelegter Tag für testssl.sh
 ARG TESTSSL_TAG="3.2"
-# h2csmuggler (Pinned Commit)
+# Festgelegter Commit für h2csmuggler
 ARG H2CSMUGGLER_COMMIT="7ea573a9b13bfce6d0f5d4a96a82e637a9dafe2e"
 
 RUN \
@@ -144,41 +144,41 @@ RUN \
     pip3 install -r /opt/jwt_tool/requirements.txt --break-system-packages && \
     chmod +x /opt/jwt_tool/jwt_tool.py && \
     ln -s /opt/jwt_tool/jwt_tool.py /usr/local/bin/jwt_tool && \
-    # 4. Gf Patterns
+    # 4. gf-Muster
     git clone https://github.com/1ndianl33t/Gf-Patterns /opt/gf-patterns && \
     mkdir -p /etc/skel/.gf && \
     cp /opt/gf-patterns/*.json /etc/skel/.gf/ && \
     rm -rf /opt/gf-patterns
 
-# --- Python & Node Tools ---
+# --- Python- und Node.js-Werkzeuge ---
 
-# JS Supply Chain & Python Tools
-# retire.js, arjun (Parameter Discovery), semgrep (SAST)
+# JavaScript-Lieferkette und Python-Werkzeuge
+# retire.js, arjun (Parametersuche), semgrep (statische Quellcodeanalyse)
 RUN npm install -g retire --no-fund --no-audit && \
     pip3 install arjun semgrep --break-system-packages
 
-# --- Copy Artifacts from Builders ---
+# --- Build-Ergebnisse übernehmen ---
 
-# Go Binaries (copied after pip to ensure ProjectDiscovery tools like httpx take precedence over python packages)
+# Go-Programme nach pip kopieren, damit etwa ProjectDiscovery-httpx Vorrang vor gleichnamigen Python-Paketen hat.
 COPY --from=go-builder /out/* /usr/local/bin/
-# Rust Binaries
+# Rust-Programme
 COPY --from=rust-builder /usr/local/cargo/bin/feroxbuster /usr/local/bin/
 COPY --from=rust-builder /usr/local/cargo/bin/rustscan /usr/local/bin/
 
-# Convenience alias for kiterunner
+# Kurzname für kiterunner
 RUN ln -s /usr/local/bin/kiterunner /usr/local/bin/kr
 
-# --- Configuration & User ---
+# --- Konfiguration und Benutzer ---
 
-# Shell profile
+# Shell-Profil
 COPY container/profile.d/pentest.sh /etc/profile.d/pentest.sh
 RUN chmod 0644 /etc/profile.d/pentest.sh
 
-# Non-root user setup
+# Nicht privilegierten Benutzer einrichten
 RUN useradd -m -u 10001 -s /bin/bash pentest && \
     mkdir -p /work/pentest && \
     chown -R pentest:pentest /work && \
-    # Ensure gf patterns are in user home (redundancy for safety)
+    # gf-Muster zusätzlich im Benutzerverzeichnis ablegen.
     if [ -d "/etc/skel/.gf" ]; then \
     cp -r /etc/skel/.gf /home/pentest/ || true; \
     chown -R pentest:pentest /home/pentest/.gf; \
@@ -187,8 +187,8 @@ RUN useradd -m -u 10001 -s /bin/bash pentest && \
 WORKDIR /work
 USER pentest
 
-# Tini entrypoint for process safety
+# Tini als Einstiegspunkt für die Prozessverwaltung verwenden
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-# Default command if none provided (interactive shell)
+# Standardbefehl, falls keiner angegeben wurde (interaktive Shell)
 CMD ["/bin/bash"]

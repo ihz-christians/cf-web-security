@@ -1,101 +1,56 @@
-# ARCH.md — System Master Artifact
+# Architektur
 
-**Status:** Active
-**Version:** 1.0.0
-**Context:** High-Security Pentest Toolkit ("Golden Phat")
+## Zweck
 
----
+Dieses Repository stellt eine containerisierte Werkzeugumgebung für autorisierte Prüfungen von Webanwendungen und APIs bereit. Die Architektur trennt den Build der Werkzeuge, ihre Laufzeit und die auf dem Host gespeicherten Ergebnisse. Sie bietet dafür eine nachvollziehbare Ausgangsbasis, ist aber keine zertifizierte oder vollständig gehärtete Sicherheitsplattform.
 
-## 1. System Definition
+## Grundsätze
 
-This repository hosts a **contained, reproducible, and secure penetration testing environment** designed for auditing Cloudflare applications and infrastructure. It strictly adheres to the **Golden Phat** architecture, prioritizing cognitive clarity, immutability, and supply chain security.
+1. **Getrennte Build- und Laufzeitumgebung:** Go- und Rust-Werkzeuge werden in vorherigen Stufen des mehrstufigen Builds installiert. Das endgültige Laufzeit-Image basiert auf Debian 12 und enthält die vorgesehenen Werkzeuge und Laufzeitabhängigkeiten.
+2. **Nicht privilegierter Container-Benutzer:** Das Image setzt `pentest` (UID 10001) als Benutzer. Die Podman-Startskripte verwerfen zusätzlich Linux-Capabilities und setzen `no-new-privileges`.
+3. **Ergebnisse auf dem Host:** Die Startskripte mounten `pentest/` nach `/work/pentest`; Ergebnisse bleiben dadurch nach dem Ende des mit `--rm` gestarteten Containers auf dem Host erhalten.
+4. **Bedienung über Skripte:** `make`, `podman-run.sh` und `podman-interactive.sh` vereinheitlichen wiederkehrende Build- und Startparameter.
 
-The system is agnostic to the host OS, relying entirely on a strictly defined OCI container image managed via Podman.
+## Komponenten
 
-## 2. Core Principles
+### Image-Build
 
-1.  **Immutability:** The runtime environment is read-only. Tools are baked in at build time. No ad-hoc `apt-get install` during operations.
-2.  **Source-Based Integrity:** We do not trust external pre-compiled binaries. All Go and Rust tools are compiled from pinned source versions within the build process.
-3.  **Data Sovereignty:** All scan data resides in `pentest/`. The container is ephemeral; the data is persistent.
-4.  **Cognitive Load Minimization:** Operations are wrapped in standardized scripts (`make`, `podman-*.sh`) to reduce syntax errors and context switching.
+Das [Containerfile](../Containerfile) verwendet drei Stufen:
 
-## 3. Architecture Layers
+- **Go-Build-Stufe:** installiert Go 1.22.3 und baut mehrere Go-Werkzeuge. Die meisten Werkzeugversionen sind als Build-Argumente festgelegt; `gf` und `qsreplace` werden derzeit mit `@latest` installiert.
+- **Rust-Build-Stufe:** baut `feroxbuster` und `rustscan`. `feroxbuster` wird mit `--locked` installiert; nicht alle Build-Abhängigkeiten des Projekts sind fest versioniert.
+- **Laufzeit-Stufe:** basiert auf `debian:12-slim`, erstellt den Benutzer `pentest` und übernimmt die gebauten Werkzeuge. Weitere Pakete und Skripte werden während des Builds installiert.
 
-### 3.1. Container Layer (`Containerfile`)
-The image construction follows a **Multi-Stage Build** pattern to ensure a minimal attack surface and maximum reproducibility.
+Damit sind weder der gesamte Build noch sämtliche Abhängigkeiten vollständig reproduzierbar: Unter anderem sind Betriebssystempakete, einige Python- und Node-Abhängigkeiten sowie mehrere geklonte Repositories nicht durchgängig auf unveränderliche Versionen oder Prüfsummen festgelegt.
 
-*   **Stage 1: Go Builder (`golang:1.22`)**
-    *   Compiles tools like `subfinder`, `nuclei`, `httpx`.
-    *   Uses pinned versions in `Containerfile`.
-*   **Stage 2: Rust Builder (`rust:slim`)**
-    *   Compiles tools like `feroxbuster`, `rustscan`.
-    *   Uses `cargo install --locked` for dependency stability.
-*   **Stage 3: Runtime (`debian:12-slim`)**
-    *   **No Compilers:** gcc/go/cargo are stripped.
-    *   **Non-Root:** Runs as user `pentest` (UID 10001).
-    *   **Tools:** Copies binaries from builders.
-    *   **Scripts:** Python/NodeJS runtimes included only where strictly necessary.
+### Startskripte
 
-### 3.2. Orchestration Layer (Scripts)
-The host interfaces with the container via two primary entrypoints:
+- `podman-run.sh <zielkennung> <befehl ...>` legt `pentest/runs/JJJJ-MM-TT_<zielkennung>/` mit Unterordnern für Erkundung, Nachweise, Befunde, Berichte und Protokolle an. Es startet den Container mit `--rm`, einem Mount von `pentest/`, `--cap-drop=ALL` und `no-new-privileges`.
+- `podman-interactive.sh [zielkennung]` startet eine interaktive Shell. Mit Zielkennung verwendet die Shell das entsprechende Tagesverzeichnis; ohne Zielkennung startet sie unter `/work/pentest`. Die Bash-History wird in `.container_bash_history` im Projektverzeichnis auf dem Host gespeichert.
 
-1.  **`podman-run.sh` (Batch Mode)**
-    *   **Purpose:** Atomic execution of a single command against a target.
-    *   **Behavior:** Creates a timestamped directory structure (`runs/YYYY-MM-DD_TARGET/`), mounts it, executes, and exits.
-2.  **`podman-interactive.sh` (Exploration Mode)**
-    *   **Purpose:** Manual investigation and debugging.
-    *   **Behavior:** Mounts the entire `pentest/` tree, persists bash history to host, and drops the user into a shell.
+Die Verzeichnisse werden nur nach Datum und Zielkennung benannt. Wiederholte Aufrufe für dasselbe Ziel am selben Tag teilen sich daher ein Verzeichnis. Die Skripte lesen die Datei `targets.txt` nicht aus und erzwingen keinen Prüfbereich; die Freigabe und Zielprüfung bleiben Aufgabe der ausführenden Person.
 
-### 3.3. Data Layer (`pentest/`)
-The `pentest/` directory is the **Single Source of Truth** for operational data.
+### GitHub Actions
+
+Der Workflow baut ein lokales Image, führt einen Smoke Test mit ausgewählten Versions- und Hilfeaufrufen aus und erstellt bei Pushes auf `main` oder Tags ein Multi-Arch-Image. Der Smoke Test ist kein vollständiger Funktionstest und überprüft nicht alle Sicherheitsparameter zur Laufzeit.
+
+## Datenfluss
 
 ```text
-pentest/
-├── targets/               # Input Data
-│   ├── targets.txt        # List of scope domains
-│   └── scope.md           # Rules of Engagement / Context
-└── runs/                  # Output Data (Immutable History)
-    └── YYYY-MM-DD_target/
-        ├── recon/         # Subdomains, DNS records
-        ├── evidence/      # Screenshots, Raw HTTP logs
-        ├── findings/      # Verified vulnerabilities
-        ├── reports/       # Generated reports
-        └── logs/          # Tool execution logs
+Host: pentest/  <->  Container: /work/pentest
+Host: .container_bash_history  <->  Container: /home/pentest/.bash_history
 ```
 
-## 4. Operational Workflow
+`pentest/runs/` ist in `.gitignore` aufgeführt. Das verhindert das übliche Git-Tracking dieser Ergebnisse, ersetzt aber weder eine Zugriffskontrolle noch Verschlüsselung oder eine geregelte Löschung auf dem Host. Der Container wird mit `--rm` entfernt; dies löscht nicht die über Mounts auf dem Host gespeicherten Daten.
 
-### 4.1. Startup
-1.  **Check Targets:** Validate `pentest/targets/scope.md`.
-2.  **Build/Update:** Run `make build-image` to ensure the toolchain is current.
+## Bekannte Grenzen
 
-### 4.2. Execution Loop
-*   **Recon:**
-    ```bash
-    make run TARGET=example.com CMD="subfinder -d example.com -o \$SCAN_RESULTS_DIR/recon/subs.txt"
-    ```
-*   **Scanning:**
-    ```bash
-    make run TARGET=example.com CMD="nuclei -l \$SCAN_RESULTS_DIR/recon/subs.txt -o \$SCAN_RESULTS_DIR/findings/nuclei.txt"
-    ```
-*   **Analysis:**
-    Launch interactive mode to manually review results:
-    ```bash
-    ./podman-interactive.sh example.com
-    ```
+- `--cap-drop=ALL` und `no-new-privileges` werden von den bereitgestellten Podman-Skripten gesetzt, nicht pauschal von jedem möglichen Aufruf des Images.
+- Der Container läuft nicht mit einem erzwungenen schreibgeschützten Dateisystem.
+- Zielvorgaben in `scope.md` und `targets.txt` werden nicht technisch validiert oder erzwungen.
+- Abhängigkeiten und Versionsangaben sind nicht vollständig reproduzierbar festgelegt.
+- Aufbewahrung, Verschlüsselung und Zugriff auf Ergebnisse müssen außerhalb des Containers geregelt werden.
 
-### 4.3. Shutdown
-1.  **Commit Data:** Review `pentest/runs/` and commit valid findings if using a private report repo (exclude raw massive logs if necessary).
-2.  **Clean:** `podman system prune` if disk space is tight.
+## Anpassung und Pflege
 
-## 5. System Invariants
-
-*   **No Root:** The container process must never run as root.
-*   **No Internet for Builds (Ideal):** (Currently allowed, but strictly pinned versions).
-*   **Explicit Mounts:** Only `pentest/` is mounted. Host system is isolated.
-*   **Structure Enforcement:** Tools should output to `$SCAN_RESULTS_DIR` (mapped via env var) to maintain organization.
-
-## 6. Maintenance & optimization
-
-*   **Updates:** To update a tool (e.g., Nuclei), edit the `ARG NUCLEI_VER` in `Containerfile` and run `make build-image`.
-*   **Drift Detection:** Periodically check `ARCH.md` against the codebase. If the code deviates, either refactor the code or update the architecture if the deviation is a deliberate improvement.
+Werkzeugversionen und Installationsschritte sind im [Containerfile](../Containerfile) definiert. Änderungen sollten mit einem Image-Build und dem verfügbaren CI-Smoke-Test geprüft werden. Die Dokumentation sollte bei Änderungen an Startskripten, Mounts oder Build-Stufen mitangepasst werden.

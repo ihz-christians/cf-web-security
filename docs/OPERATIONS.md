@@ -1,118 +1,85 @@
-# Operations Manual: Cloudflare Security Toolkit
+# Betrieb und Nutzung
 
-## 1. System Architecture
+## Voraussetzungen
 
-This toolkit adheres to the **"Golden Phat" Architecture**, prioritizing reproducibility, security, and strict data isolation. It is designed as a **stateless processing unit** (the container) operating on **persistent state** (the host filesystem).
+- Podman und GNU Make
+- Git sowie eine Netzwerkverbindung, wenn die Wortlisten mit `make wordlists` geladen werden sollen
+- Optional Docker, wenn das Image ohne die bereitgestellten Podman-Skripte genutzt wird
 
-### 1.1. The Container (The Tool)
--   **Build Strategy:** Source-Based Multi-Stage Build.
-    -   **Stage 1 (Go):** Compiles Go-based tools (`httpx`, `nuclei`, etc.) from source.
-    -   **Stage 2 (Rust):** Compiles Rust-based tools (`feroxbuster`, `rustscan`) from source via `cargo`.
-    -   **Stage 3 (Runtime):** A minimal `debian:slim` image containing only the compiled binaries and essential runtime dependencies.
--   **Ephemeral Nature:** The container is designed to be disposable. It is always executed with the `--rm` flag, ensuring it is destroyed immediately after the session ends.
--   **Security Context:** Runs as a non-root user (`pentest`, UID 10001) to mitigate container breakout risks. Uses `tini` as an init process for proper signal handling.
+Die Befehle in diesem Handbuch setzen voraus, dass sie im Projektverzeichnis ausgeführt werden. Vor jedem aktiven Test müssen eine schriftliche Freigabe und ein konkreter Prüfbereich vorliegen. Die Datei [scope.md](../pentest/targets/scope.md) ist nur eine Vorlage und erteilt selbst keine Freigabe.
 
-### 1.2. The Host (The Vault)
--   **Source of Truth:** The local directory `pentest/` on the host machine acts as the single source of truth for all configuration and results.
--   **Volume Mounts:**
-    -   **Data Mount:** Host `pentest/` ↔ Container `/work/pentest`. This bridge allows the container to write results directly to the host's encrypted filesystem.
-    -   **History Mount:** Host `.container_bash_history` ↔ Container `~/.bash_history`. Preserves command history across ephemeral sessions (Interactive mode only).
+## Image bauen
 
----
-
-## 2. Data Lifecycle & Persistence
-
-Strict adherence to this model ensures compliance with data privacy regulations (e.g., GDPR) and client confidentiality agreements.
-
-### 2.1. Where Data Lives
-| Data Type | Location | Persistence | Description |
-| :--- | :--- | :--- | :--- |
-| **Scan Results** | Host: `pentest/runs/` | **Permanent** | Evidence, logs, and reports. Backed up by the user. |
-| **Target Config** | Host: `pentest/targets/` | **Permanent** | Scope definitions and target lists. Versioned in Git. |
-| **Temporary Files** | Container: `/tmp` | **Ephemeral** | Deleted instantly when the container exits. |
-| **Tool Caches** | Container: `~/.cache` | **Ephemeral** | Deleted instantly when the container exits. |
-
-### 2.2. Directory Structure
-The system enforces a structured approach to every engagement via the runner scripts.
-
-```text
-pentest/
-├── targets/              # Configuration (Git-tracked)
-│   ├── targets.txt       # List of authorized targets
-│   └── scope.md          # Legal scope definition
-└── runs/                 # Results (Git-ignored)
-    └── YYYY-MM-DD_target/
-        ├── recon/        # Raw output (subdomains, ports)
-        ├── evidence/     # Proofs (screenshots, headers)
-        ├── findings/     # Human-written analysis
-        └── logs/         # Tool execution logs
+```bash
+make build
 ```
 
-### 2.3. Git Hygiene
-A strict `.gitignore` policy ensures that **no client data** is ever committed to the repository. The repository contains logic and configuration; the local filesystem contains intelligence.
+Der Build lädt Build-Abhängigkeiten und Werkzeuge aus externen Quellen. Nicht alle davon sind auf unveränderliche Versionen festgelegt; identische Build-Ergebnisse sind daher nicht garantiert.
 
----
+Wortlisten können bei Bedarf separat geladen werden:
 
-## 3. Operational Workflows
+```bash
+make wordlists
+```
 
-### 3.1. Interactive Mode ("The Lab")
-**Script:** `./podman-interactive.sh [target_identifier]`
+Sie werden unter `pentest/wordlists/` abgelegt und nicht mit Git versioniert.
 
-Used for manual deep-dives, exploration, and complex command chaining.
+## Interaktive Sitzung
 
-*   **With Target:** `./podman-interactive.sh example.com`
-    *   Automatically creates the `runs/YYYY-MM-DD_example.com` directory structure.
-    *   Sets `$SCAN_RESULTS_DIR` and `$TARGET_ID` environment variables.
-    *   Drops the user into a shell **inside** the result directory.
-*   **Without Target:** `./podman-interactive.sh`
-    *   Drops the user into the root `/work/pentest` directory.
-    *   Useful for maintenance or cross-target analysis.
+Für eine Sitzung mit einer Zielkennung:
 
-**Key Feature:** Command history is preserved on the host. You can recall complex one-liners from previous sessions even after the container has been rebuilt.
+```bash
+make interactive TARGET=example.com
+```
 
-### 3.2. Automated Mode ("The Sniper")
-**Script:** `./podman-run.sh <target_identifier> <command...>`
+Ohne Zielkennung:
 
-Used for CI/CD pipelines, cron jobs, or "fire-and-forget" tasks.
+```bash
+make interactive
+```
 
-*   **Mechanism:**
-    1.  Prepares the directory structure.
-    2.  Spins up the container.
-    3.  Executes the specific command provided.
-    4.  Terminates the container.
-*   **Example:**
-    ```bash
-    ./podman-run.sh example.com httpx -u https://example.com -o $SCAN_RESULTS_DIR/recon/http.txt
-    ```
+Mit Zielkennung legt das Skript ein Tagesverzeichnis unter `pentest/runs/` an und setzt `TARGET_ID` sowie `SCAN_RESULTS_DIR`. Ohne Zielkennung startet die Shell unter `/work/pentest`. Die Bash-History wird auf dem Host in `.container_bash_history` aufbewahrt. Sie kann Befehle oder vertrauliche Informationen enthalten und sollte entsprechend geschützt und bei Bedarf gelöscht werden.
 
-### 3.3. CI/CD Integration (GitHub Actions)
-The container is CI-ready. To use it in a workflow:
-1.  **Build:** `podman build -t cf-pentest .`
-2.  **Execute:** Use `./podman-run.sh` to wrap tool execution, ensuring artifacts are stored in the correct path.
-3.  **Artifacts:** Use the `actions/upload-artifact` step to save the contents of `pentest/runs/` generated during the build.
+## Einzelnen Befehl ausführen
 
----
+```bash
+make run TARGET=example.com CMD='httpx -u https://example.com'
+```
 
-## 4. Compliance & Security
+Das Skript legt ein Verzeichnis `pentest/runs/JJJJ-MM-TT_<zielkennung>/` an, mountet `pentest/` und setzt `SCAN_RESULTS_DIR` und `TARGET_ID`. Verwende `"$SCAN_RESULTS_DIR"` in Befehlen für Ausgabepfade, zum Beispiel:
 
-This architecture supports "Red Team" compliance requirements:
+```bash
+make run TARGET=example.com CMD='httpx -u https://example.com -o "$SCAN_RESULTS_DIR/recon/http.txt"'
+```
 
-1.  **Forensic Integrity:** Using specific, pinned versions of tools (SHA-1 commits) ensures that findings are reproducible.
-2.  **Clean Desk Policy:** Since the container is stateless and filesystem writes are tunnelled to the host, no sensitive data remains in container layers or temporary caches after the session closes.
-3.  **Scope Enforcement:** The workflow encourages defining targets explicitly. The folder structure makes it obvious which data belongs to which engagement.
+`example.com` dient nur als Beispiel und ist keine Freigabe. Die Tagesverzeichnisse sind nicht pro Aufruf eindeutig; mehrere Läufe für dieselbe Zielkennung am selben Tag verwenden dieselbe Ablage. `podman-run.sh` startet Podman mit einer TTY-Option und ist deshalb nicht ohne Anpassung für alle nicht-interaktiven CI-Umgebungen geeignet.
 
-## 5. Troubleshooting
+## Ergebnisse und Datenhaltung
 
-**Error: `requires at least 1 arg(s), only received 0`**
-*   **Cause:** The container or a tool inside it was called without necessary arguments.
-*   **Fix:** Ensure you are passing a valid command string to `podman-run.sh`.
-    *   *Bad:* `./podman-run.sh example.com` (No command specified)
-    *   *Good:* `./podman-run.sh example.com id`
+- Laufdaten werden bei Verwendung der Startskripte unter `pentest/runs/` auf dem Host gespeichert.
+- `.gitignore` schließt diesen Ordner vom üblichen Git-Tracking aus. Vor einem Commit sollte trotzdem `git status` geprüft werden.
+- Verschlüsselung, Zugriffskontrolle, Sicherung und Löschung richten sich nach der Host-Umgebung und sind nicht Teil des Containers.
+- Über die Mounts gespeicherte Daten bleiben nach dem Ende des Containers bestehen. `--rm` entfernt den Container, nicht die Host-Ergebnisse.
+- Prüfe Befunde manuell und dokumentiere nachvollziehbare Nachweise, ohne mehr personenbezogene oder vertrauliche Daten als nötig zu speichern.
 
-**Permission Denied on Result Files**
-*   **Cause:** The container runs as UID 10001 (`pentest`).
-*   **Fix:** Podman usually handles user namespace mapping automatically on rootless setups (macOS/Linux). If issues persist, ensure your host user has permissions on the `pentest/` directory.
+## CI-Hinweis
 
-**Tool Not Found**
-*   **Cause:** The tool might not be in the `$PATH` or was removed from the build.
-*   **Fix:** Check `Containerfile` to see if the tool is installed. In interactive mode, type `alias` to see if there is a shortcut (e.g., `kr` for `kiterunner`).
+Der vorhandene GitHub-Actions-Workflow baut das Image, prüft ausgewählte CLI-Aufrufe und erstellt bei Pushes auf `main` oder Tags ein Multi-Arch-Image. Er führt keine Zielscans aus und ist kein umfassender Funktionstest der Werkzeuge.
+
+## Fehlerbehebung
+
+### Fehlende Argumente
+
+`podman-run.sh` benötigt eine Zielkennung und einen auszuführenden Befehl:
+
+```bash
+./podman-run.sh example.com httpx -u https://example.com
+```
+
+### Schreibfehler im Ergebnisordner
+
+Der Container verwendet UID 10001. Ob Schreibzugriffe auf den gemounteten Ordner funktionieren, hängt auch von Podman, der Host-Plattform und der Dateifreigabe ab. Prüfe die Podman-Mount-Konfiguration und die Berechtigungen auf dem Host, statt Ergebnisse mit erweiterten Rechten auszuführen.
+
+### Werkzeug nicht gefunden
+
+Prüfe, ob das Werkzeug im [Containerfile](../Containerfile) installiert wird und ob das Image nach der Änderung neu gebaut wurde. `kr` ist ein symbolischer Link auf `kiterunner`.

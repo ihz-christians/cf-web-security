@@ -1,88 +1,81 @@
 #!/usr/bin/env bash
 #
-# Golden Phat: Interactive Session Launcher
+# Interaktive Sitzung im Prüfcontainer starten
 #
-# This script starts a manual, interactive shell inside the security container.
-# It ensures that:
-# 1. All persistent data (targets, findings) is mounted correctly.
-# 2. Command history is preserved between sessions (via .bash_history).
-# 3. The container remains ephemeral (--rm) and clean.
+# Das Skript startet eine interaktive Shell im Container.
+# 1. Das Verzeichnis pentest/ wird eingebunden.
+# 2. Der Befehlsverlauf wird über .bash_history auf dem Host gespeichert.
+# 3. Der Container wird nach Sitzungsende entfernt (--rm).
 #
-# Usage: ./podman-interactive.sh [target_identifier]
+# Verwendung: ./podman-interactive.sh [zielkennung]
 #
-# If a target_identifier is provided, a specific run directory is created and selected.
-# If not, the shell starts in the main pentest directory for general tasks.
+# Mit Zielkennung wird das zugehörige Tagesverzeichnis angelegt und verwendet.
+# Ohne Zielkennung startet die Shell im Hauptverzeichnis pentest/.
 
 set -euo pipefail
 
-# --- Configuration ---
+# --- Konfiguration ---
 readonly IMAGE="${IMAGE:-cf-web-api-security:latest}"
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PENTEST_DIR="${PROJECT_ROOT}/pentest"
 readonly HISTORY_FILE="${PROJECT_ROOT}/.container_bash_history"
 
-# --- Setup Persistence ---
-# Create a local history file if it doesn't exist.
-# This ensures that your command history inside the container is saved
-# to your host machine, so you don't lose it when the container exits.
+# --- Befehlsverlauf auf dem Host speichern ---
+# Lokale Verlaufsdatei bei Bedarf anlegen.
 if [[ ! -f "${HISTORY_FILE}" ]]; then
     touch "${HISTORY_FILE}"
 fi
 
-# --- Context Setup ---
-# Check if a target argument was provided
+# --- Arbeitsverzeichnis bestimmen ---
+# Prüfen, ob eine Zielkennung angegeben wurde.
 TARGET_ID="${1:-}"
 START_DIR="/work/pentest"
 ENV_VARS=()
 
 if [[ -n "${TARGET_ID}" ]]; then
-    # Mode: Target-Scoped Session
-    # Automatically prepare the environment for a specific target scan.
+    # Sitzung mit Zielkennung; Ergebnisverzeichnis vorbereiten.
     TIMESTAMP=$(date +'%Y-%m-%d')
     RUN_DIR_RELATIVE="runs/${TIMESTAMP}_${TARGET_ID}"
     RUN_DIR_ABSOLUTE="${PENTEST_DIR}/${RUN_DIR_RELATIVE}"
 
-    echo "[+] Mode: Target-Scoped Session"
-    echo "[+] Target: ${TARGET_ID}"
-    echo "[+] Context: ${RUN_DIR_RELATIVE}"
+    echo "[+] Modus: Sitzung mit Zielkennung"
+    echo "[+] Zielkennung: ${TARGET_ID}"
+    echo "[+] Verzeichnis: ${RUN_DIR_RELATIVE}"
 
-    # Enforce Architecture: Create the standard directory structure
+    # Standard-Unterverzeichnisse anlegen.
     if ! mkdir -p \
         "${RUN_DIR_ABSOLUTE}/recon" \
         "${RUN_DIR_ABSOLUTE}/evidence" \
         "${RUN_DIR_ABSOLUTE}/findings" \
         "${RUN_DIR_ABSOLUTE}/reports" \
         "${RUN_DIR_ABSOLUTE}/logs"; then
-        echo "Error: Failed to create results directory." >&2
+        echo "Fehler: Ergebnisverzeichnis konnte nicht angelegt werden." >&2
         exit 1
     fi
 
-    # Set environment variables for the container tools (Absolute path inside container)
+    # Umgebungsvariablen mit Containerpfaden setzen.
     ENV_VARS+=("-e" "SCAN_RESULTS_DIR=/work/pentest/${RUN_DIR_RELATIVE}")
     ENV_VARS+=("-e" "TARGET_ID=${TARGET_ID}")
 
-    # Start the shell directly inside the run directory for focus
+    # Shell im Ergebnisverzeichnis starten.
     START_DIR="/work/pentest/${RUN_DIR_RELATIVE}"
 else
-    # Mode: General Exploration
-    echo "[+] Mode: General Exploration Session"
-    echo "[+] Context: Root (/work/pentest)"
-    echo "[!] Note: No specific result directory selected."
+    # Allgemeine Sitzung ohne Zielkennung.
+    echo "[+] Modus: Allgemeine Sitzung"
+    echo "[+] Verzeichnis: /work/pentest"
+    echo "[!] Hinweis: Kein bestimmtes Ergebnisverzeichnis ausgewählt."
     ENV_VARS+=("-e" "SCAN_RESULTS_DIR=/work/pentest")
 fi
 
-# --- Execution ---
-echo "[+] Starting interactive shell..."
+# --- Container starten ---
+echo "[+] Interaktive Shell wird gestartet..."
 echo "---------------------------------------------------"
-echo "Host Path: ${PENTEST_DIR}"
-echo "Cont Path: /work/pentest"
+echo "Host-Pfad: ${PENTEST_DIR}"
+echo "Container-Pfad: /work/pentest"
 echo "---------------------------------------------------"
 
-# Execute Podman with all necessary mounts
-# Mount the main data volume (Source of Truth)
-# Mount bash history for persistence across sessions
-# Set the working directory based on context
-# Inject computed environment variables (if any)
+# Datenverzeichnis und Befehlsverlauf einbinden.
+# Arbeitsverzeichnis festlegen und vorhandene Umgebungsvariablen übergeben.
 exec podman run --rm -it \
     --name "cf-web-api-security-interactive-$(date +%s)" \
     --security-opt="no-new-privileges" \

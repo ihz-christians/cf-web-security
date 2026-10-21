@@ -1,51 +1,40 @@
-# Compliance Protocol: Cloudflare Penetration Testing
+# Hinweise zu Prüfungen auf Cloudflare
 
-## 1. Introduction
+## Zweck und Geltungsbereich
 
-This document outlines the technical and operational measures implemented within this security toolkit to ensure full compliance with Cloudflare's published policies regarding penetration testing and security scans.
+Dieses Dokument fasst organisatorische Hinweise für Sicherheitsprüfungen von Anwendungen zusammen, die Cloudflare-Dienste nutzen. Es ist keine Erklärung, dass ein bestimmter Test oder dieses Repository die Cloudflare-Regeln vollständig erfüllt. Es ist keine Rechtsberatung.
 
-The primary objective is to conduct effective security assessments while maintaining the stability, performance, and integrity of the target infrastructure hosted on Cloudflare. All testing activities are designed to be non-disruptive and respectful of the shared infrastructure model.
+Vor jeder Prüfung sind die aktuellen Bedingungen und Vorgaben von Cloudflare sowie die Vereinbarungen mit dem Betreiber der Zielanwendung zu prüfen. Die jeweils gültigen Regeln können sich ändern.
 
-**Reference:** [Cloudflare - Scans and Penetration Testing](https://developers.cloudflare.com/fundamentals/reference/scans-penetration/)
+**Referenz:** [Cloudflare: Scans and penetration testing](https://developers.cloudflare.com/fundamentals/reference/scans-penetration/)
 
-## 2. Core Compliance Principles
+## Vor Beginn
 
-Our testing methodology is guided by the following principles:
+- Hole eine ausdrückliche schriftliche Genehmigung der berechtigten Eigentümer oder Betreiber ein.
+- Bestätige, welche Anwendung, Hostnamen, APIs und Cloud-Dienste umfasst sind. Die Nutzung von Cloudflare durch ein Ziel bedeutet nicht automatisch, dass dessen Edge- oder sonstige Anbieter-Infrastruktur für aktive Tests freigegeben ist.
+- Kläre erlaubte Prüfmethoden, Zeitraum, Anfrageraten, Kontakt für Störungen und Abbruchkriterien.
+- Prüfe, ob zusätzliche Genehmigungen des Plattformanbieters erforderlich sind.
 
--   **Authorization First:** All testing activities are conducted only after receiving explicit, written permission from the owner of the target assets.
--   **Non-Disruption:** Tools and techniques are configured to avoid any impact on service availability or performance. We explicitly forbid Denial-of-Service (DoS) or other high-volume, flood-style tests.
--   **Controlled Scope:** Scans are strictly limited to the targets defined in the `pentest/targets/` directory, which serves as the authoritative source of truth for the authorized scope.
--   **Transparency and Auditability:** All actions, tool outputs, and generated data are logged and stored in immutable, timestamped directories (`pentest/runs/`) to provide a complete audit trail.
+## Schonende Durchführung
 
-## 3. Technical Compliance Measures
+- Beginne mit risikoarmen, begrenzten Prüfungen und verwende nur den schriftlich vereinbarten Umfang.
+- Begrenze Anfragen und Umfang entsprechend der Freigabe. Die Startskripte dieses Repositories erzwingen keine globalen Ratenlimits.
+- Führe keine Last- oder Verfügbarkeitstests, Umgehungsversuche oder destruktiven Tests ohne gesonderte ausdrückliche Genehmigung durch.
+- Stelle die Prüfung bei unerwarteter Beeinträchtigung, Sperre oder unklarem Umfang ein und informiere die vereinbarte Kontaktperson.
+- Verifiziere automatisierte Treffer manuell und mit möglichst geringer Auswirkung.
 
-To enforce these principles, the toolkit employs several technical controls:
+## Was das Repository technisch umsetzt
 
-### 3.1. Traffic and Rate Limiting
+Die Podman-Skripte setzen `--cap-drop=ALL` und `no-new-privileges`, verwenden einen nicht privilegierten Container-Benutzer und mounten `pentest/` für die Ergebnisablage. Diese Maßnahmen begrenzen bestimmte Risiken, setzen aber weder die Freigabe noch den Prüfbereich oder die zulässige Anfragerate technisch durch.
 
-Scanning tools are configured with conservative settings to prevent traffic patterns that could be mistaken for malicious activity or a DoS attack.
+Die Dokumentation behauptet daher nicht, dass:
 
--   **`httpx`:** Default settings are used for probing, which are not overly aggressive. Rate limiting (`-rl`) can be enforced in custom configurations if required.
--   **`ffuf`:** The default configuration avoids high thread counts. Rate limiting (`-rate`) is mandated for any large-scale content discovery to ensure a low and slow approach.
--   **`nuclei`:** Bulk request templates and those known to generate high traffic volumes are excluded from the default scan policies. Rate limiting (`-rl`) is applied globally.
+- nur Ziele aus `targets.txt` erreichbar oder prüfbar sind;
+- Werkzeuge automatisch ein vereinbartes Ratenlimit einhalten;
+- alle enthaltenen Werkzeugoptionen nicht-destruktiv sind;
+- Scan-Ergebnisse automatisch verschlüsselt, bereinigt oder gegen Zugriff geschützt werden;
+- eine Prüfung allein durch die Konfiguration dieses Containers mit Anbieterbedingungen oder geltendem Recht übereinstimmt.
 
-### 3.2. Avoidance of Destructive Payloads
+## Aufbewahrung und Meldung
 
-The toolkit is engineered to identify potential vulnerabilities, not to actively exploit them in a way that could compromise system integrity.
-
--   **`nuclei` Templates:** The selected templates focus on detection and information gathering. Templates designed for active exploitation or those with a high potential for service disruption are not included in the standard CI/CD test runs.
--   **No Automated Exploitation:** The framework does not include tools for automated remote code execution, SQL injection exploitation, or similar high-risk activities. Manual validation is required for all findings.
-
-### 3.3. Scope Enforcement
-
-The operational scripts (`podman-run.sh`) and CI workflows are designed to read their target configuration exclusively from the `pentest/targets/` directory. This mechanism programmatically prevents "scope creep" and ensures that only authorized assets are scanned.
-
-## 4. Tool-Specific Considerations
-
--   **Reconnaissance Tools (`subfinder`, `amass`, `dnsx`):** These tools are used in passive or non-intrusive modes to gather publicly available information. They do not send malicious requests or perform aggressive probing.
--   **TLS/SSL Testing (`testssl.sh`):** This tool performs a series of standards-compliant checks against TLS configurations. It is a diagnostic tool and does not engage in disruptive behavior.
--   **API Discovery (`kiterunner`):** Used with curated wordlists and conservative request rates to identify unlinked or undocumented API endpoints without overwhelming the target.
-
-## 5. Conclusion
-
-This toolkit has been architected with Cloudflare's policies as a core design constraint. By combining technical rate-limiting, strict scope enforcement, non-disruptive testing techniques, and a commitment to operational transparency, we ensure that all security assessments are conducted responsibly and in full compliance with provider guidelines.
+Bewahre nur für den Auftrag erforderliche Nachweise auf, beschränke den Zugriff und halte die vereinbarte Löschfrist ein. Berichte mögliche Auswirkungen zeitnah an die vereinbarte Kontaktperson. Weitere Hinweise zum Ablauf stehen im [Prüfleitfaden](../PLAYBOOK.md) und in der [Vorlage für Umfang und Freigabe](../../pentest/targets/scope.md).

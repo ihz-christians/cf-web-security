@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Golden Phat: Project Automation
+# Projektbefehle
 # ------------------------------------------------------------------------------
 
 IMAGE_NAME := cf-web-api-security
@@ -7,41 +7,41 @@ IMAGE_TAG  := latest
 
 .PHONY: help build build-image run interactive clean wordlists
 
-help: ## Display this help message
-	@echo "Usage: make <target> [vars]"
+help: ## Diese Hilfe anzeigen
+	@echo "Verwendung: make <Ziel> [Variablen]"
 	@echo ""
-	@echo "Targets:"
+	@echo "Ziele:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Variables:"
-	@echo "  TARGET  Target identifier for scans (e.g., 'example.com')"
-	@echo "  CMD     Command to execute inside the container (e.g., 'nuclei ...')"
+	@echo "Variablen:"
+	@echo "  TARGET  Zielkennung für die Prüfung (z. B. 'example.com')"
+	@echo "  CMD     Im Container auszuführender Befehl (z. B. 'nuclei ...')"
 
-build: ## Build the container image from source
+build: ## Container-Image bauen
 	podman build -t $(IMAGE_NAME):$(IMAGE_TAG) -f Containerfile .
 
-build-image: build ## Alias for build
+build-image: build ## Alias für build
 
 
-run: ## Execute a command in a target-scoped container
+run: ## Befehl im Container mit Zielkennung ausführen
 	@if [ -z "$(TARGET)" ] || [ -z "$(CMD)" ]; then \
-		echo "Error: TARGET and CMD are required."; \
-		echo "Usage: make run TARGET=example.com CMD='subfinder -d example.com'"; \
+		echo "Fehler: TARGET und CMD müssen angegeben werden."; \
+		echo "Verwendung: make run TARGET=example.com CMD='subfinder -d example.com'"; \
 		exit 1; \
 	fi
 	./podman-run.sh "$(TARGET)" /bin/bash -lc "$(CMD)"
 
-interactive: ## Start an interactive shell (optional: TARGET=...)
+interactive: ## Interaktive Shell starten (optional: TARGET=...)
 	./podman-interactive.sh "$(TARGET)"
 
-clean: ## Remove the local container image
+clean: ## Lokales Container-Image entfernen
 	podman rmi $(IMAGE_NAME):$(IMAGE_TAG) || true
 
-wordlists: ## Download SecLists to pentest/wordlists
-	@echo "[+] Downloading SecLists..."
+wordlists: ## SecLists-Wortlisten nach pentest/wordlists laden
+	@echo "[+] SecLists-Wortlisten werden geladen..."
 	@mkdir -p pentest/wordlists
 	@if [ ! -d "pentest/wordlists/SecLists" ]; then \
 		git clone --depth 1 https://github.com/danielmiessler/SecLists.git pentest/wordlists/SecLists; \
 	else \
-		echo "[!] SecLists already exists in pentest/wordlists/SecLists"; \
+		echo "[!] SecLists ist bereits unter pentest/wordlists/SecLists vorhanden."; \
 	fi
